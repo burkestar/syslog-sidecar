@@ -5,7 +5,7 @@ metadata:
 data:
   rsyslog.conf: |
     module(load="imudp")
-    input(type="imudp" port="515")
+    input(type="imudp" port="10515")
     *.* /var/log/syslog
 ---
 apiVersion: apps/v1
@@ -41,7 +41,7 @@ spec:
           seccompProfile:
             type: RuntimeDefault
         ports:
-        - containerPort: 515
+        - containerPort: 10515
           protocol: UDP
         volumeMounts:
         - name: rsyslog-config
@@ -71,4 +71,4 @@ spec:
   ports:
     - protocol: UDP
       port: 515
-      targetPort: 515
+      targetPort: 10515

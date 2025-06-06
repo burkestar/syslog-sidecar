@@ -62,14 +62,14 @@ kubectl logs -f <syslog-server-pod-name>
 +------------------+       +------------------+       +------------------+
 |                  |       |                  |       |                  |
 |  Python App      |------>|  Fluentd Sidecar |------>|  rsyslog Server  |
-|  (localhost:514) |       |  (localhost:514) |       |  (UDP:515)       |
+|  (localhost:514) |       |  (localhost:514) |       |  (UDP:10515)       |
 |                  |       |                  |       |                  |
 +------------------+       +------------------+       +------------------+
 ```
 
 You can configure `SYSLOG_HOST` and `SYSLOG_PORT` environment variables on python-app container to
 either send to fluentd sidecar (using UDP on localhost port 514) or bypass fluentd and send directly
-to rsyslog server (using UDP on syslog-server port 515).
+to rsyslog server (using UDP on syslog-server port 10515).
 
 ## Notes
 

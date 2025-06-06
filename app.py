@@ -23,7 +23,7 @@ logger = logging.getLogger('myapp')
 logger.setLevel(logging.INFO)
 
 SYSLOG_HOST = os.environ.get('SYSLOG_HOST', 'syslog-server')
-SYSLOG_PORT = int(os.environ.get('SYSLOG_PORT', 515))
+SYSLOG_PORT = int(os.environ.get('SYSLOG_PORT', 10515))
 
 # Create SysLogHandler with UDP transport
 syslog_handler = logging.handlers.SysLogHandler(

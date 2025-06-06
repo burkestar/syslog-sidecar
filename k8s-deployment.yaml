@@ -67,7 +67,7 @@ data:
     <match syslog.**>
       @type remote_syslog
       host syslog-server
-      port 515
+      port 10515
       protocol udp
       facility user
       severity info
