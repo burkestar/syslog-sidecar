@@ -1,9 +1,0 @@
-FROM fluent/fluentd:v1.16
-
-USER root
-
-# syslog plugin: https://docs.fluentd.org/input/syslog
-# remote_syslog plugin: https://github.com/fluent-plugins-nursery/fluent-plugin-remote_syslog
-RUN gem install fluent-plugin-syslog fluent-plugin-remote_syslog
-
-USER fluent

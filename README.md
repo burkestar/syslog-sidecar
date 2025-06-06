@@ -1,80 +1,96 @@
-# Syslog Sidecar Application
+# Syslog Sidecar Example
 
-This is a simple Python application that logs to syslog, with a Fluentd sidecar container that forwards logs to a remote syslog server.
-
-## Prerequisites
-
-- Docker
-- Kubernetes cluster (local or remote)
-- kubectl configured to work with your cluster
-
-## Building the Application
-
-1. Build the Python application Docker image:
-```bash
-docker build -t syslog-app:latest .
-```
-
-2. Build the Fluentd Docker image:
-```bash
-docker build -t fluentd-syslog:latest -f Dockerfile.fluentd .
-```
-
-## Deploying to Kubernetes
-
-1. Deploy the syslog server first:
-```bash
-kubectl delete -f k8s-syslog-server.yaml
-kubectl apply -f k8s-syslog-server.yaml
-```
-
-2. Deploy the main application:
-```bash
-kubectl delete -f k8s-deployment.yaml
-kubectl apply -f k8s-deployment.yaml
-```
-
-3. Verify the deployment:
-```bash
-# Check all pods are running
-kubectl get pods
-
-# View logs from the Python application
-kubectl logs -f <python-app-pod-name> -c python-app
-
-# View logs from Fluentd
-kubectl logs -f <python-app-pod-name> -c fluentd
-
-# View logs from the syslog server
-kubectl logs -f <syslog-server-pod-name>
-```
+This example demonstrates how to forward logs from a Python application to a remote syslog server using rsyslog as a sidecar container.
 
 ## Architecture
 
-- The Python application logs to syslog on localhost:514
-- The Fluentd sidecar container listens on port 514 for syslog messages
-- Fluentd forwards the logs to the syslog server
-- The syslog server displays received messages in its logs
+- **Python Application**: Generates logs and sends them to a Unix domain socket
+- **rsyslog Sidecar**: Receives logs from the Unix domain socket and forwards them to the remote syslog server
+- **Remote Syslog Server**: Receives and processes the forwarded logs
 
-### Network Flow Diagram
+## Components
 
+1. **Python Application (`app.py`)**
+   - Uses Python's `SysLogHandler` to send logs to a Unix domain socket
+   - Configured to send logs in RFC 5424 format
+
+2. **rsyslog Sidecar**
+   - Uses the official `rsyslog/syslog_appliance_alpine` image
+   - Listens on a Unix domain socket for logs from the Python application
+   - Forwards logs to the remote syslog server using UDP
+
+3. **Remote Syslog Server**
+   - Listens on UDP port 10515 for incoming syslog messages
+   - Processes and stores the received logs
+
+## Configuration
+
+### rsyslog Configuration (`rsyslog.conf`)
+```conf
+# Load modules
+module(load="imuxsock")
+module(load="builtin:omfwd")
+
+# Listen on Unix socket
+input(type="imuxsock" Socket="/var/run/rsyslog/log.sock")
+
+# Forward to syslog server
+*.* action(type="omfwd"
+          target="syslog-server"
+          port="10515"
+          protocol="udp"
+          action.resumeRetryCount="10"
+          queue.type="linkedList"
+          queue.size="10000")
 ```
-+------------------+       +------------------+       +------------------+
-|                  |       |                  |       |                  |
-|  Python App      |------>|  Fluentd Sidecar |------>|  rsyslog Server  |
-|  (localhost:514) |       |  (localhost:514) |       |  (UDP:10515)       |
-|                  |       |                  |       |                  |
-+------------------+       +------------------+       +------------------+
-```
 
-You can configure `SYSLOG_HOST` and `SYSLOG_PORT` environment variables on python-app container to
-either send to fluentd sidecar (using UDP on localhost port 514) or bypass fluentd and send directly
-to rsyslog server (using UDP on syslog-server port 10515).
+### Python Application Configuration
+The Python application is configured to send logs to the Unix domain socket at `/var/run/rsyslog/log.sock`.
 
-## Notes
+## Deployment
 
-- The application uses UDP for syslog communication
-- The syslog server is deployed as a separate service in the cluster
-- The Fluentd configuration can be customized in the ConfigMap
-- The Fluentd container includes the syslog plugin for forwarding logs
-- The syslog server now uses rsyslog for robust syslog handling
+1. Build the Python application image:
+   ```bash
+   docker build -t syslog-app:latest -f Dockerfile .
+   ```
+
+2. Deploy the application and rsyslog sidecar:
+   ```bash
+   kubectl apply -f k8s-deployment.yaml
+   ```
+
+## Testing
+
+1. Check if the Python application is sending logs:
+   ```bash
+   kubectl logs -l app=syslog-app -c python-app
+   ```
+
+2. Check if the rsyslog sidecar is forwarding logs:
+   ```bash
+   kubectl logs -l app=syslog-app -c rsyslog
+   ```
+
+3. Check if the remote syslog server is receiving logs:
+   ```bash
+   kubectl logs -l app=syslog-server
+   ```
+
+## Troubleshooting
+
+If logs are not being forwarded:
+
+1. Check if the Unix domain socket exists:
+   ```bash
+   kubectl exec -it $(kubectl get pod -l app=syslog-app -o jsonpath='{.items[0].metadata.name}') -c rsyslog -- ls -la /var/run/rsyslog/log.sock
+   ```
+
+2. Check rsyslog configuration:
+   ```bash
+   kubectl exec -it $(kubectl get pod -l app=syslog-app -o jsonpath='{.items[0].metadata.name}') -c rsyslog -- cat /etc/rsyslog.conf
+   ```
+
+3. Check rsyslog debug logs:
+   ```bash
+   kubectl exec -it $(kubectl get pod -l app=syslog-app -o jsonpath='{.items[0].metadata.name}') -c rsyslog -- cat /var/log/rsyslog-debug.log
+   ```

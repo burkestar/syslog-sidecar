@@ -70,5 +70,5 @@ spec:
     app: syslog-server
   ports:
     - protocol: UDP
-      port: 515
+      port: 10515
       targetPort: 10515

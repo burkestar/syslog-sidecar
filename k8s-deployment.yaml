@@ -24,58 +24,46 @@ spec:
           value: "127.0.0.1"
         - name: SYSLOG_PORT
           value: "514"
-      - name: fluentd
-        image: fluentd-syslog:latest
-        imagePullPolicy: Never
         volumeMounts:
-        - name: fluentd-config
-          mountPath: /fluentd/etc/fluent.conf
-          subPath: fluent.conf
+        - name: rsyslog-socket
+          mountPath: /var/run/rsyslog
+      - name: rsyslog
+        image: rsyslog/syslog_appliance_alpine:latest
+        volumeMounts:
+        - name: rsyslog-config
+          mountPath: /etc/rsyslog.conf
+          subPath: rsyslog.conf
+        - name: rsyslog-socket
+          mountPath: /var/run/rsyslog
       volumes:
-      - name: fluentd-config
+      - name: rsyslog-config
         configMap:
-          name: fluentd-config
+          name: rsyslog-config
+      - name: rsyslog-socket
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: fluentd-config
+  name: rsyslog-config
 data:
-  fluent.conf: |
-    <system>
-      log_level debug
-      suppress_repeated_stacktrace true
-      emit_error_log_interval 10
-      suppress_config_dump true
-      root_dir /tmp/fluentd
-    </system>
+  rsyslog.conf: |
+    # Load modules
+    module(load="imuxsock")
+    module(load="builtin:omfwd")
 
-    <source>
-      @type syslog
-      port 514
-      bind 0.0.0.0
-      tag syslog
-      <parse>
-        @type regexp
-        expression /^<(?<pri>\d+)>(?<message>.*)$/
-        time_key time
-        time_type string
-        time_format %Y-%m-%dT%H:%M:%S%z
-      </parse>
-    </source>
+    # Listen on Unix socket
+    input(type="imuxsock" Socket="/var/run/rsyslog/log.sock")
 
-    <match syslog.**>
-      @type remote_syslog
-      host syslog-server
-      port 10515
-      protocol udp
-      facility user
-      severity info
-      <buffer>
-        flush_mode interval
-        flush_interval 5
-        flush_thread_interval 0.5
-        flush_thread_burst_interval 0.5
-      </buffer>
-    </match> 
+    # Forward to syslog server
+    *.* action(type="omfwd"
+              target="syslog-server"
+              port="10515"
+              protocol="udp"
+              action.resumeRetryCount="5"
+              queue.type="linkedList"
+              queue.size="5")
+
+    $DebugFile /var/log/rsyslog-debug.log
+    $DebugLevel 2 
     
