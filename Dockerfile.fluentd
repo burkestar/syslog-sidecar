@@ -1,0 +1,8 @@
+FROM fluent/fluentd:v1.16
+
+USER root
+
+# Install syslog plugin
+RUN gem install fluent-plugin-syslog fluent-plugin-remote_syslog
+
+USER fluent
