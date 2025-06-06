@@ -22,9 +22,24 @@ spec:
       labels:
         app: syslog-server
     spec:
+      securityContext:
+        fsGroup: 1000770000
+        runAsUser: 1000770000
+        runAsGroup: 1000770000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: rsyslog
         image: rsyslog/syslog_appliance_alpine
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
         ports:
         - containerPort: 515
           protocol: UDP
@@ -34,12 +49,17 @@ spec:
           subPath: rsyslog.conf
         - name: varlog
           mountPath: /var/log
+        - name: config-volume
+          mountPath: /config
       volumes:
       - name: rsyslog-config
         configMap:
           name: rsyslog-config
       - name: varlog
         emptyDir: {}
+      - name: config-volume
+        emptyDir:
+          medium: Memory
 ---
 apiVersion: v1
 kind: Service
