@@ -56,6 +56,21 @@ kubectl logs -f <syslog-server-pod-name>
 - Fluentd forwards the logs to the syslog server
 - The syslog server displays received messages in its logs
 
+### Network Flow Diagram
+
+```
++------------------+       +------------------+       +------------------+
+|                  |       |                  |       |                  |
+|  Python App      |------>|  Fluentd Sidecar |------>|  rsyslog Server  |
+|  (localhost:514) |       |  (localhost:514) |       |  (UDP:515)       |
+|                  |       |                  |       |                  |
++------------------+       +------------------+       +------------------+
+```
+
+You can configure `SYSLOG_HOST` and `SYSLOG_PORT` environment variables on python-app container to
+either send to fluentd sidecar (using UDP on localhost port 514) or bypass fluentd and send directly
+to rsyslog server (using UDP on syslog-server port 515).
+
 ## Notes
 
 - The application uses UDP for syslog communication
