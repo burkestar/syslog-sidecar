@@ -1,0 +1,444 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kubernetes.io/description: Listens for audit log events and app usage messages
+      published in RabbitMQ, transforming and emitting them to one or more configured
+      downstreams (audit DB in Mongo, Amplitude for usage)
+    meta.helm.sh/release-name: dr
+    meta.helm.sh/release-namespace: dr-app
+  labels:
+    app: dr
+    app.kubernetes.io/component: analyticsbroker
+    app.kubernetes.io/instance: dr
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: analyticsbroker-publisher
+    release: dr
+    role: analyticsbroker-publisher
+  name: analyticsbroker-publisher
+  namespace: dr-app
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      release: dr
+      role: analyticsbroker-publisher
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        datarobot.com/helm-revision: "11"
+        kubernetes.io/description: Listens for audit log events and app usage messages
+          published in RabbitMQ, transforming and emitting them to one or more configured
+          downstreams (audit DB in Mongo, Amplitude for usage)
+      labels:
+        app: dr
+        app.kubernetes.io/component: analyticsbroker
+        app.kubernetes.io/instance: dr
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: analyticsbroker-publisher
+        release: dr
+        role: analyticsbroker-publisher
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - analyticsbroker-publisher
+                - key: app.kubernetes.io/instance
+                  operator: In
+                  values:
+                  - dr
+              topologyKey: topology.kubernetes.io/zone
+            weight: 90
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - analyticsbroker-publisher
+                - key: app.kubernetes.io/instance
+                  operator: In
+                  values:
+                  - dr
+              topologyKey: kubernetes.io/hostname
+            weight: 10
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - /opt/datarobot-runtime/app/DataRobot/bin/datarobot-analyticsbroker-publisher
+        - --probe-server-with-port
+        - "7005"
+        env:
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: MY_NODE_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        - name: KUBE_NAMESPACE
+          value: dr-app
+        - name: ENABLE_SYSLOG
+          value: "true"
+        - name: SYSLOG_ADDRESS
+          value: "/datarobot/share/log.sock"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: redis-password
+              name: pcs-redis
+        - name: MMM_ACTUALS_STORAGE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: datavolt
+              optional: true
+        - name: MMAPP_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: mmapp-credentials
+        - name: RABBITMQ_USER
+          valueFrom:
+            secretKeyRef:
+              key: rabbitmq-username
+              name: pcs-rabbitmq
+        - name: RABBITMQ_PASS
+          valueFrom:
+            secretKeyRef:
+              key: rabbitmq-password
+              name: pcs-rabbitmq
+        - name: ELASTICSEARCH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: elasticsearch-password
+              name: pcs-elasticsearch
+              optional: true
+        - name: MONGO_USER
+          valueFrom:
+            secretKeyRef:
+              key: mongodb-root-username
+              name: pcs-mongo
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: mongodb-root-password
+              name: pcs-mongo
+        - name: PGSQL_POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: postgres-password
+              name: pcs-postgresql
+        - name: PGSQL_MODMON_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: pcs-db-modmon
+        - name: PGSQL_MESSAGE_QUEUE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: pcs-db-messagequeue
+        - name: PGSQL_MESSAGE_QUEUE_DB
+          valueFrom:
+            secretKeyRef:
+              key: database
+              name: pcs-db-messagequeue
+        - name: PGSQL_MESSAGE_QUEUE_USER
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: pcs-db-messagequeue
+        - name: AWS_CA_BUNDLE
+          value: /datarobot/tls/ca-cert-bundle.crt
+        - name: REQUESTS_CA_BUNDLE
+          value: /datarobot/tls/ca-cert-bundle.crt
+        - name: SSL_CERT_FILE
+          value: /datarobot/tls/ca-cert-bundle.crt
+        - name: CUSTOM_CA_K8S_CONFIG
+          value: '{"env":[{"name":"AWS_CA_BUNDLE","value":"/datarobot/tls/ca-cert-bundle.crt"},{"name":"REQUESTS_CA_BUNDLE","value":"/datarobot/tls/ca-cert-bundle.crt"},{"name":"SSL_CERT_FILE","value":"/datarobot/tls/ca-cert-bundle.crt"}],"volumeMounts":[{"mountPath":"/datarobot/tls/ca-cert-bundle.crt","name":"ca-cert-bundle","readOnly":true,"subPath":"pem_formatted"},{"mountPath":"/etc/pki/tls/certs/ca-bundle.crt","name":"ca-cert-bundle","readOnly":true,"subPath":"pem_formatted"},{"mountPath":"/etc/ssl/certs/ca-certificates.crt","name":"ca-cert-bundle","readOnly":true,"subPath":"pem_formatted"},{"mountPath":"/opt/java/openjdk/lib/security/cacerts","name":"ca-cert-bundle","readOnly":true,"subPath":"jks_formatted"},{"mountPath":"/etc/pki/ca-trust/extracted/java/cacerts","name":"ca-cert-bundle","readOnly":true,"subPath":"jks_formatted"},{"mountPath":"/opt/datarobot-libs/virtualenvs/datarobot/lib/jvm/default-java/lib/security/cacerts","name":"ca-cert-bundle","readOnly":true,"subPath":"jks_formatted"}],"volumes":[{"configMap":{"defaultMode":420,"items":[{"key":"pem_formatted","path":"pem_formatted"},{"key":"jks_formatted","path":"jks_formatted"}],"name":"ca-cert-bundle","optional":false},"name":"ca-cert-bundle"}]}'
+        envFrom:
+        - configMapRef:
+            name: datarobot-modeling-envvars
+        - secretRef:
+            name: datarobot-filestore
+        image: docker.io/datarobot/datarobot-runtime:11.0.0-bma-release.6aa934c2faa8a77e
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /liveness
+            port: 7005
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 10
+        name: analyticsbroker-publisher
+        ports:
+        - containerPort: 5000
+          name: publisher
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 500Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /tmp/
+          name: tmpdir
+        - mountPath: /datarobot/local/
+          name: datarobot-local
+        - mountPath: /datarobot/share/
+          name: datarobot-share
+        - mountPath: /mnt/local_file_storage/
+          name: app-local
+        - mountPath: /datarobot/bootstrap/admin/config.yaml
+          name: app-config-yaml
+          readOnly: true
+          subPath: config.yaml
+        - mountPath: /datarobot/bootstrap/admin/secure/secrets/
+          name: datarobot-secrets
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/core
+          name: core-credentials
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/redis
+          name: redis-secret
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/mongodb
+          name: mongodb-secret
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/mongodb-username
+          name: mongodb-username-secret
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/rabbitmq
+          name: rabbitmq-secret
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/postgres
+          name: postgresql-secret
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/postgres-modmon
+          name: postgres-modmon-credentials
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/postgres-messagequeue
+          name: postgres-messagequeue-credentials
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/mmapp
+          name: mmapp-credentials
+          readOnly: true
+        - mountPath: /datarobot/bootstrap/admin/secure/pcs/elasticsearch
+          name: elasticsearch-credentials
+          readOnly: true
+        - mountPath: /datarobot/tls/ca-cert-bundle.crt
+          name: ca-cert-bundle
+          readOnly: true
+          subPath: pem_formatted
+        - mountPath: /etc/pki/tls/certs/ca-bundle.crt
+          name: ca-cert-bundle
+          readOnly: true
+          subPath: pem_formatted
+        - mountPath: /etc/ssl/certs/ca-certificates.crt
+          name: ca-cert-bundle
+          readOnly: true
+          subPath: pem_formatted
+        - mountPath: /opt/java/openjdk/lib/security/cacerts
+          name: ca-cert-bundle
+          readOnly: true
+          subPath: jks_formatted
+        - mountPath: /etc/pki/ca-trust/extracted/java/cacerts
+          name: ca-cert-bundle
+          readOnly: true
+          subPath: jks_formatted
+        - mountPath: /opt/datarobot-libs/virtualenvs/datarobot/lib/jvm/default-java/lib/security/cacerts
+          name: ca-cert-bundle
+          readOnly: true
+          subPath: jks_formatted
+
+      - name: rsyslog
+        image: rsyslog/syslog_appliance_alpine:latest
+        volumeMounts:
+        - name: rsyslog-config
+          mountPath: /etc/rsyslog.conf
+          subPath: rsyslog.conf
+        - mountPath: /datarobot/share/
+          name: datarobot-share
+        - name: rsyslog-config-dir
+          mountPath: /config
+
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+      - name: datarobot-image-pullsecret
+      nodeSelector:
+        datarobot: use
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir: {}
+        name: tmpdir
+      - emptyDir: {}
+        name: app-local
+      - emptyDir: {}
+        name: datarobot-local
+      - emptyDir: {}
+        name: datarobot-share
+      - name: rsyslog-config
+        configMap:
+          name: rsyslog-config
+      - name: rsyslog-config-dir
+        emptyDir: {}
+      - configMap:
+          defaultMode: 420
+          items:
+          - key: config.yaml
+            path: config.yaml
+          name: datarobot-modeling-l4-config-yaml
+        name: app-config-yaml
+      - name: datarobot-secrets
+        secret:
+          defaultMode: 420
+          secretName: datarobot-secrets
+      - name: redis-secret
+        secret:
+          defaultMode: 420
+          items:
+          - key: redis-password
+            path: redis-password
+          secretName: pcs-redis
+      - name: mongodb-username-secret
+        secret:
+          defaultMode: 420
+          items:
+          - key: mongodb-root-username
+            path: mongo-username
+          secretName: pcs-mongo
+      - name: mongodb-secret
+        secret:
+          defaultMode: 420
+          items:
+          - key: mongodb-root-password
+            path: mongo-password
+          secretName: pcs-mongo
+      - name: rabbitmq-secret
+        secret:
+          defaultMode: 420
+          items:
+          - key: rabbitmq-password
+            path: rabbitmq-password
+          - key: rabbitmq-username
+            path: rabbitmq-username
+          secretName: pcs-rabbitmq
+      - name: postgresql-secret
+        secret:
+          defaultMode: 420
+          items:
+          - key: postgres-password
+            path: postgres-password
+          secretName: pcs-postgresql
+      - name: postgres-modmon-credentials
+        secret:
+          defaultMode: 420
+          items:
+          - key: password
+            path: password
+          secretName: pcs-db-modmon
+      - name: postgres-messagequeue-credentials
+        secret:
+          defaultMode: 420
+          items:
+          - key: password
+            path: password
+          secretName: pcs-db-messagequeue
+      - name: mmapp-credentials
+        secret:
+          defaultMode: 420
+          items:
+          - key: password
+            path: mmapp-password
+          secretName: mmapp-credentials
+      - name: core-credentials
+        secret:
+          defaultMode: 420
+          items:
+          - key: asymmetrickey
+            path: asymmetrickey
+          - key: drsecurekey
+            path: drsecurekey
+          secretName: core-credentials
+      - name: elasticsearch-credentials
+        secret:
+          defaultMode: 420
+          items:
+          - key: elasticsearch-password
+            path: elasticsearch-password
+          optional: true
+          secretName: pcs-elasticsearch
+      - configMap:
+          defaultMode: 420
+          items:
+          - key: pem_formatted
+            path: pem_formatted
+          - key: jks_formatted
+            path: jks_formatted
+          name: ca-cert-bundle
+          optional: false
+        name: ca-cert-bundle
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rsyslog-config
+data:
+  rsyslog.conf: |
+    # Load modules
+    module(load="imuxsock")
+    module(load="builtin:omfwd")
+
+    # Listen on Unix socket
+    input(type="imuxsock" Socket="/datarobot/share/log.sock")
+
+    # Forward to syslog server
+    *.* action(type="omfwd"
+              target="syslog-server.rsyslog"
+              port="10515"
+              protocol="udp"
+              action.resumeRetryCount="5"
+              queue.type="linkedList"
+              queue.size="5")
+
+    $DebugFile /var/log/rsyslog-debug.log
+    $DebugLevel 2 

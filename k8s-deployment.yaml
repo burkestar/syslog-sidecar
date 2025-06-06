@@ -35,11 +35,15 @@ spec:
           subPath: rsyslog.conf
         - name: rsyslog-socket
           mountPath: /var/run/rsyslog
+        - name: rsyslog-config-dir
+          mountPath: /config
       volumes:
       - name: rsyslog-config
         configMap:
           name: rsyslog-config
       - name: rsyslog-socket
+        emptyDir: {}
+      - name: rsyslog-config-dir
         emptyDir: {}
 ---
 apiVersion: v1
